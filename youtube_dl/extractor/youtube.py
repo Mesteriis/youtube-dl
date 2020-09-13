@@ -289,9 +289,7 @@ class YoutubeEntryListBaseInfoExtractor(YoutubeBaseInfoExtractor):
     def _entries(self, page, playlist_id):
         more_widget_html = content_html = page
         for page_num in itertools.count(1):
-            for entry in self._process_page(content_html):
-                yield entry
-
+            yield from self._process_page(content_html)
             mobj = re.search(r'data-uix-load-more-href="/?(?P<more>[^"]+)"', more_widget_html)
             if not mobj:
                 break
@@ -1616,7 +1614,7 @@ class YoutubeIE(YoutubeBaseInfoExtractor):
         # cpn generation algorithm is reverse engineered from base.js.
         # In fact it works even with dummy cpn.
         CPN_ALPHABET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_'
-        cpn = ''.join((CPN_ALPHABET[random.randint(0, 256) & 63] for _ in range(0, 16)))
+        cpn = ''.join(CPN_ALPHABET[random.randint(0, 256) & 63] for _ in range(16))
 
         qs.update({
             'ver': ['2'],
@@ -1671,8 +1669,7 @@ class YoutubeIE(YoutubeBaseInfoExtractor):
         mobj = re.match(cls._VALID_URL, url, re.VERBOSE)
         if mobj is None:
             raise ExtractorError('Invalid URL: %s' % url)
-        video_id = mobj.group(2)
-        return video_id
+        return mobj.group(2)
 
     def _extract_chapters_from_json(self, webpage, video_id, duration):
         if not webpage:
@@ -3303,9 +3300,7 @@ class YoutubeFeedsInfoExtractor(YoutubeBaseInfoExtractor):
 
             ids.extend(new_ids)
 
-            for entry in self._ids_to_results(new_ids):
-                yield entry
-
+            yield from self._ids_to_results(new_ids)
             mobj = re.search(r'data-uix-load-more-href="/?(?P<more>[^"]+)"', more_widget_html)
             if not mobj:
                 break
