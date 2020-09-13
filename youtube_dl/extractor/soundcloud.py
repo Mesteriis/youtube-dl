@@ -496,7 +496,7 @@ class SoundcloudPlaylistBaseIE(SoundcloudIE):
     def _extract_set(self, playlist, token=None):
         playlist_id = compat_str(playlist['id'])
         tracks = playlist.get('tracks') or []
-        if not all([t.get('permalink_url') for t in tracks]) and token:
+        if not all(t.get('permalink_url') for t in tracks) and token:
             tracks = self._download_json(
                 self._API_V2_BASE + 'tracks', playlist_id,
                 'Downloading tracks', query={
@@ -558,8 +558,10 @@ class SoundcloudSetIE(SoundcloudPlaylistBaseIE):
 
 class SoundcloudPagedPlaylistBaseIE(SoundcloudIE):
     def _extract_playlist(self, base_url, playlist_id, playlist_title):
+        # Per the SoundCloud documentation, the maximum limit for a linked partioning query is 200.
+        # https://developers.soundcloud.com/blog/offset-pagination-deprecated
         COMMON_QUERY = {
-            'limit': 2000000000,
+            'limit': 200,
             'linked_partitioning': '1',
         }
 

@@ -61,12 +61,13 @@ class FFmpegPostProcessor(PostProcessor):
             raise FFmpegPostProcessorError('ffmpeg or avconv not found. Please install one.')
 
         required_version = '10-0' if self.basename == 'avconv' else '1.0'
-        if is_outdated_version(
-                self._versions[self.basename], required_version):
+        if (
+            is_outdated_version(self._versions[self.basename], required_version)
+            and self._downloader
+        ):
             warning = 'Your copy of %s is outdated, update %s to version %s or newer if you encounter any errors.' % (
                 self.basename, self.basename, required_version)
-            if self._downloader:
-                self._downloader.report_warning(warning)
+            self._downloader.report_warning(warning)
 
     @staticmethod
     def get_versions(downloader=None):
@@ -256,10 +257,7 @@ class FFmpegExtractAudioPP(FFmpegPostProcessor):
         self._nopostoverwrites = nopostoverwrites
 
     def run_ffmpeg(self, path, out_path, codec, more_opts):
-        if codec is None:
-            acodec_opts = []
-        else:
-            acodec_opts = ['-acodec', codec]
+        acodec_opts = [] if codec is None else ['-acodec', codec]
         opts = ['-vn'] + acodec_opts + more_opts
         try:
             FFmpegPostProcessor.run_ffmpeg(self, path, out_path, opts)
@@ -284,9 +282,9 @@ class FFmpegExtractAudioPP(FFmpegPostProcessor):
                 # Lossless if possible
                 acodec = 'copy'
                 extension = filecodec
-                if filecodec == 'aac':
+                if extension == 'aac':
                     more_opts = ['-f', 'adts']
-                if filecodec == 'vorbis':
+                if extension == 'vorbis':
                     extension = 'ogg'
             else:
                 # MP3 otherwise.
@@ -311,7 +309,7 @@ class FFmpegExtractAudioPP(FFmpegPostProcessor):
                     more_opts += ['-b:a', self._preferredquality + 'k']
             if self._preferredcodec == 'aac':
                 more_opts += ['-f', 'adts']
-            if self._preferredcodec == 'm4a':
+            elif self._preferredcodec == 'm4a':
                 more_opts += ['-bsf:a', 'aac_adtstoasc']
             if self._preferredcodec == 'vorbis':
                 extension = 'ogg'
@@ -391,11 +389,11 @@ class FFmpegEmbedSubtitlePP(FFmpegPostProcessor):
 
         for lang, sub_info in subtitles.items():
             sub_ext = sub_info['ext']
-            if ext != 'webm' or ext == 'webm' and sub_ext == 'vtt':
+            if ext != 'webm' or sub_ext == 'vtt':
                 sub_langs.append(lang)
                 sub_filenames.append(subtitles_filename(filename, lang, sub_ext, ext))
             else:
-                if not webm_vtt_warn and ext == 'webm' and sub_ext != 'vtt':
+                if not webm_vtt_warn:
                     webm_vtt_warn = True
                     self._downloader.to_screen('[ffmpeg] Only WebVTT subtitles can be embedded in webm files')
 
@@ -447,6 +445,13 @@ class FFmpegMetadataPP(FFmpegPostProcessor):
                         metadata[meta_f] = info[info_f]
                     break
 
+        # See [1-4] for some info on media metadata/metadata supported
+        # by ffmpeg.
+        # 1. https://kdenlive.org/en/project/adding-meta-data-to-mp4-video/
+        # 2. https://wiki.multimedia.cx/index.php/FFmpeg_Metadata
+        # 3. https://kodi.wiki/view/Video_file_tagging
+        # 4. http://atomicparsley.sourceforge.net/mpeg-4files.html
+
         add('title', ('track', 'title'))
         add('date', 'upload_date')
         add(('description', 'comment'), 'description')
@@ -457,6 +462,10 @@ class FFmpegMetadataPP(FFmpegPostProcessor):
         add('album')
         add('album_artist')
         add('disc', 'disc_number')
+        add('show', 'series')
+        add('season_number')
+        add('episode_id', ('episode', 'episode_id'))
+        add('episode_sort', 'episode_number')
 
         if not metadata:
             self._downloader.to_screen('[ffmpeg] There isn\'t any metadata to add')

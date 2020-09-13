@@ -1837,6 +1837,12 @@ def write_json_file(obj, fn):
                 os.unlink(fn)
             except OSError:
                 pass
+        try:
+            mask = os.umask(0)
+            os.umask(mask)
+            os.chmod(tf.name, 0o666 & ~mask)
+        except OSError:
+            pass
         os.rename(tf.name, fn)
     except Exception:
         try:
@@ -2533,7 +2539,12 @@ def handle_youtubedl_headers(headers):
     filtered_headers = headers
 
     if 'Youtubedl-no-compression' in filtered_headers:
-        filtered_headers = dict((k, v) for k, v in filtered_headers.items() if k.lower() != 'accept-encoding')
+        filtered_headers = {
+            k: v
+            for k, v in filtered_headers.items()
+            if k.lower() != 'accept-encoding'
+        }
+
         del filtered_headers['Youtubedl-no-compression']
 
     return filtered_headers
@@ -2773,18 +2784,9 @@ class YoutubeDLCookieJar(compat_cookiejar.MozillaCookieJar):
                     continue
                 if not ignore_expires and cookie.is_expired(now):
                     continue
-                if cookie.secure:
-                    secure = 'TRUE'
-                else:
-                    secure = 'FALSE'
-                if cookie.domain.startswith('.'):
-                    initial_dot = 'TRUE'
-                else:
-                    initial_dot = 'FALSE'
-                if cookie.expires is not None:
-                    expires = compat_str(cookie.expires)
-                else:
-                    expires = ''
+                secure = 'TRUE' if cookie.secure else 'FALSE'
+                initial_dot = 'TRUE' if cookie.domain.startswith('.') else 'FALSE'
+                expires = compat_str(cookie.expires) if cookie.expires is not None else ''
                 if cookie.value is None:
                     # cookies.txt regards 'Set-Cookie: foo' as a cookie
                     # with no name, whereas http.cookiejar regards it as a
@@ -3160,9 +3162,13 @@ def write_string(s, out=None, encoding=None):
         out = sys.stderr
     assert type(s) == compat_str
 
-    if sys.platform == 'win32' and encoding is None and hasattr(out, 'fileno'):
-        if _windows_write_string(s, out):
-            return
+    if (
+        sys.platform == 'win32'
+        and encoding is None
+        and hasattr(out, 'fileno')
+        and _windows_write_string(s, out)
+    ):
+        return
 
     if ('b' in getattr(out, 'mode', '')
             or sys.version_info[0] < 3):  # Python 2 lies about mode of sys.stderr
@@ -3338,10 +3344,7 @@ def format_bytes(bytes):
         return 'N/A'
     if type(bytes) is str:
         bytes = float(bytes)
-    if bytes == 0.0:
-        exponent = 0
-    else:
-        exponent = int(math.log(bytes, 1024.0))
+    exponent = 0 if bytes == 0.0 else int(math.log(bytes, 1024.0))
     suffix = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'][exponent]
     converted = float(bytes) / float(1024 ** exponent)
     return '%.2f%s' % (converted, suffix)
@@ -3587,9 +3590,8 @@ class PUTRequest(compat_urllib_request.Request):
 
 
 def int_or_none(v, scale=1, default=None, get_attr=None, invscale=1):
-    if get_attr:
-        if v is not None:
-            v = getattr(v, get_attr, None)
+    if get_attr and v is not None:
+        v = getattr(v, get_attr, None)
     if v == '':
         v = None
     if v is None:
@@ -4192,6 +4194,7 @@ def mimetype2ext(mt):
         'vnd.ms-sstr+xml': 'ism',
         'quicktime': 'mov',
         'mp2t': 'ts',
+        'x-wav': 'wav',
     }.get(res, res)
 
 
@@ -5369,7 +5372,7 @@ def long_to_bytes(n, blocksize=0):
     n = int(n)
     while n > 0:
         s = compat_struct_pack('>I', n & 0xffffffff) + s
-        n = n >> 32
+        n >>= 32
     # strip off leading zeros
     for i in range(len(s)):
         if s[i] != b'\000'[0]:
@@ -5397,7 +5400,7 @@ def bytes_to_long(s):
     if length % 4:
         extra = (4 - length % 4)
         s = b'\000' * extra + s
-        length = length + extra
+        length += extra
     for i in range(0, length, 4):
         acc = (acc << 32) + compat_struct_unpack('>I', s[i:i + 4])[0]
     return acc
