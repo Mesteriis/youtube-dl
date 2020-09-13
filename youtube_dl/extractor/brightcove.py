@@ -611,8 +611,8 @@ class BrightcoveNewIE(AdobePassIE):
             if catalog:
                 catalog = self._parse_json(
                     js_to_json(catalog), video_id, fatal=False)
-                if catalog:
-                    policy_key = catalog.get('policyKey')
+            if catalog:
+                policy_key = catalog.get('policyKey')
 
             if not policy_key:
                 policy_key = self._search_regex(
